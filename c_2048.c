@@ -144,10 +144,16 @@ void update_game() {
 	clear();
 	for (int i=0; i<=CELL*CELL_SIZE; i++) {
                 for (int j=0; j<=CELL*CELL_SIZE; j++) {
-                        if (i % CELL_SIZE == 0 || j % CELL_SIZE == 0) {
-                                mvaddch(i, j, '*');
-                                refresh();
-                        }
+                        if (i % CELL_SIZE == 0 && j % CELL_SIZE == 0) {
+				mvprintw(i, j, "+");
+			}
+			else if (i % CELL_SIZE == 0) {
+				mvprintw(i, j, "-");
+			}
+			else if (j % CELL_SIZE == 0) {
+				mvprintw(i, j, "|");
+			}
+			refresh();
                 }
         }
 	refresh();
