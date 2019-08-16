@@ -33,6 +33,9 @@ int  updateFood();
 void updateBody();
 void *updateGame(void *args);
 void *getCommand(void *args);
+int ifGameOver();
+struct point nextPosition();
+void doGameOver();
 
 int main() {
 	pthread_t commThread, updateThread;
@@ -45,10 +48,11 @@ int main() {
 	pthread_create(&updateThread, NULL, updateGame, NULL);
 	pthread_create(&commThread, NULL, getCommand, NULL);
 	
-	int ch = getch();
+	//int ch = getch();
 	while (!gameOver) {
 		//ch = getch();
 	}
+	doGameOver();
 	getch();
 	endwin();
 	pthread_exit(NULL);
@@ -106,6 +110,14 @@ void printFrame(){
 
 	mvprintw(5, FRAME_W + 4, "score:%d", score);
 	mvprintw(food.x, food.y, "*");
+
+	mvprintw(FRAME_H + 5, 0, "Press 'W' to move up.");
+	mvprintw(FRAME_H + 6, 0, "Press 'S' to move down.");
+	mvprintw(FRAME_H + 7, 0, "Press 'A' to move left.");
+	mvprintw(FRAME_H + 8, 0, "Press 'D' to move right.");
+	mvprintw(FRAME_H + 9, 0, "Press 'P' to pause game.");
+	mvprintw(FRAME_H +10, 0, "Press 'E' to exit game.");
+	refresh();
 }
 
 void printSnake(int display) {
@@ -149,34 +161,25 @@ int updateFood() {
 }
 
 void updateBody() {
-	int nextX, nextY;
+	struct point next = nextPosition();
 
 	printSnake(0);
-	switch(direction) {
-		case UP:
-			nextX = body[0].x - 1;
-			nextY = body[0].y;
-			break;
-		case DOWN:
-			nextX = body[0].x + 1;
-			nextY = body[0].y;
-			break;
-		case LEFT:
-			nextX = body[0].x;
-			nextY = body[0].y - 1;
-			break;
-		case RIGHT:
-			nextX = body[0].x;
-			nextY = body[0].y + 1;
-			break;
+	
+	if (next.x == food.x && next.y == food.y) {
+		body[bodyLength] = body[bodyLength-1];
+		score++;
+		bodyLength++;
+		updateFood();
+		mvprintw(food.x, food.y, "*");
+		refresh();
 	}
 	
 	for (int i=bodyLength-1; i>0; i--) {
 		body[i].x = body[i-1].x;
 		body[i].y = body[i-1].y;
 	}
-	body[0].x = nextX;
-	body[0].y = nextY;
+	body[0].x = next.x;
+	body[0].y = next.y;
 	printSnake(1);
 }
 
@@ -224,7 +227,57 @@ void *updateGame(void *args) {
 	while (!gameOver) {
 		sleep(1);
 		if (!gamePause) {
-			updateBody();
+			if (ifGameOver()) {
+				gameOver = 1;
+			}
+			else {
+				updateBody();
+			}
 		}
 	}
+}
+
+int ifGameOver() {
+	struct point next = nextPosition();
+
+	if (next.x < 1 || next.x > FRAME_H || next.y < 1 || next.y > FRAME_W) {
+		return 1;
+	}
+
+	for (int i=1; i<bodyLength; i++) {
+		if (next.x == body[i].x && next.y == body[i].y) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+struct point nextPosition() {
+	struct point next;
+        switch (direction) {
+                case UP:
+                        next.x = body[0].x - 1;
+                        next.y = body[0].y;
+                        break;
+                case DOWN:
+                        next.x = body[0].x + 1;
+                        next.y = body[0].y;
+                        break;
+                case RIGHT:
+                        next.x = body[0].x;
+                        next.y = body[0].y + 1;
+                        break;
+                case LEFT:
+                        next.x = body[0].x;
+                        next.y = body[0].y - 1;
+                        break;
+        }
+	return next;
+}
+
+void doGameOver() {
+	clear();
+	mvprintw(0, 0, "GAME OVER! Your score is %d", score);
+	mvprintw(2, 0, "Press any key to exit");
+	refresh();
 }
