@@ -35,6 +35,7 @@ struct point curPosition;//方块的当前位置
 int gameOver;//游戏结束参数
 int gamePause;//游戏暂停参数
 int speed;
+int scoreType[5] = {0, 1, 3, 5, 10};//五种得分情况的具体分数，消除一行得一分，两行3分，以此类推
 
 void init();//初始化窗口和随机数种子等操作
 void welcome();//欢迎界面
@@ -50,10 +51,15 @@ void doLeft();//左移处理
 void doRight();//右移处理
 void doPause();//暂停处理
 void doExit();//退出游戏处理
+void doGameOver();//游戏结束得处理
 void *updateGame(void *args);//定时更新游戏的函数，主要是每秒将方块下落一个位置
 int ifBlockDrop();//判断当前方块是否可以继续下落
 void newBlock();//一个方块完成，新产生一个方块
 void doBlockDrop();//将方块下落一格
+void getScore();//判断是否得分得处理
+void eliminate(int row);//消除指定行
+void printRoom();//绘制游戏空间
+int ifGameOver();//判断游戏是否结束
 
 int main() {
 	pthread_t commThread, updateThread;
@@ -61,19 +67,12 @@ int main() {
 	welcome();
 	initGame();
 	printFrame();
-	/*
-	for (int i=0; i<7; i++) {
-		for (int j=0; j<4; j++) {
-			printBlock(8, 4, blocks[i][j], 1);
-			getch();
-			printBlock(8, 4, blocks[i][j], 0);
-		}
-	}
-	//getch();
-	*/
+	
 	pthread_create(&commThread, NULL, getCommand, NULL);
 	pthread_create(&updateThread, NULL, updateGame, NULL);
 	while (!gameOver);
+	
+	doGameOver();
 	getch();
 	endwin();
 	return 0;
@@ -119,7 +118,14 @@ void printFrame() {
 	}
 	/*绘制下一个方块和得分*/
 	mvprintw(1, FRAME_W + 4, "next");
-	mvprintw(FRAME_H - 4, FRAME_W + 4, "score:");
+	mvprintw(FRAME_H - 4, FRAME_W + 4, "score:0");
+	mvprintw(30, 0, "Press 'W' to rotate.");
+	mvprintw(31, 0, "Press 'A' to shift left.");
+	mvprintw(32, 0, "Press 'D' to shift right.");
+	mvprintw(33, 0, "Press 'S' to drop faster.");
+	mvprintw(34, 0, "Press 'E' to exit game.");
+	mvprintw(35, 0, "Press 'P' to pause game.");
+
 	
 	printBlock(4, FRAME_W + 4, blocks[nextBlock.id][nextBlock.shape], 1);
 	return;
@@ -220,7 +226,7 @@ void *getCommand(void *args) {//监听控制命令的线程
 }
 
 void doRotate() {//旋转操作的函数
-	mvprintw(30, 0, "Rotate          ");
+	//mvprintw(30, 0, "Rotate          ");
 	int targetShape = (curBlock.shape + 1) % 4;
 	struct point p;
 	for (int i=0; i<4; i++) {//此循环判断当然是否可以旋转
@@ -244,7 +250,7 @@ void doRotate() {//旋转操作的函数
 
 void doLeft() {
 	struct point p;
-        mvprintw(30, 0, "Left            ");
+        //mvprintw(30, 0, "Left            ");
 	for (int i=0; i<4; i++) {//此循环判断是否可以左移
 		p = blocks[curBlock.id][curBlock.shape].p[i];
 		if (curPosition.y + p.y <= 1) {//判断是否越界
@@ -263,7 +269,7 @@ void doLeft() {
 
 void doRight() {//与左移类似
 	struct point p;
-        mvprintw(30, 0, "Right           ");
+        //mvprintw(30, 0, "Right           ");
 	for (int i=0; i<4; i++) {
                 p = blocks[curBlock.id][curBlock.shape].p[i];
                 if (curPosition.y + p.y >= FRAME_W) {
@@ -287,7 +293,7 @@ void doBlockDrop() {//方块下落操作，在调用之前判断是否可以下�
 }
 
 void doPause() {//暂停游戏
-        mvprintw(30, 0, "Pause           ");
+        //mvprintw(30, 0, "Pause           ");
 	if (gamePause) {
 		gamePause = 0;
 	}
@@ -297,8 +303,13 @@ void doPause() {//暂停游戏
 }
 
 void doExit() {//退出游戏
-        mvprintw(30, 0, "Exit            ");
+        //mvprintw(30, 0, "Exit            ");
 	gameOver = 1;
+}
+
+void doGameOver() {
+	clear();
+	mvprintw(0, 0, "GAME OVER! Your score is %d.", score);
 }
 
 void *updateGame(void *args){//定时更新当前方块的子线程的函数，主要是定时判断当前方块是否可以下落，是则下落，否则新生成方块
@@ -313,7 +324,11 @@ void *updateGame(void *args){//定时更新当前方块的子线程的函数，�
 				p = blocks[curBlock.id][curBlock.shape].p[i];
 				room[curPosition.x + p.x][curPosition.y + p.y] = 1;
 			}
+			getScore();
 			newBlock();
+			if (ifGameOver()) {
+				gameOver = 1;
+			}
 		}
 		sleep(speed);//根据游戏速度睡眠
 	}
@@ -333,6 +348,66 @@ int ifBlockDrop() {//判断当前方块是否可以下落
 	return 1;
 }
 
+void getScore() {
+	int row = FRAME_H;
+	int continuityRow = 0;
+	int flag;
+	while (row >= 0) {//自底向上判断每行是否填满
+		flag = 1;
+		for (int i=1; i<=FRAME_W; i++) {
+			if (!room[row][i]) {
+				flag = 0;
+				score += scoreType[continuityRow];
+				continuityRow = 0;
+				break;
+			}
+		}
+		if (flag){ 
+			continuityRow++;//continuityRow变量记录连续行
+			eliminate(row);//消除当前行
+		}
+		else {
+			row--;
+		}
+	}
+	printRoom();
+}
+
+void eliminate(int row) {
+	while (row) {
+		for (int i=1; i<=FRAME_W; i++) {//自底向上将上一行得值赋给下一行
+			room[row][i] = room[row-1][i];
+		}
+		row--;
+	}
+}
+
+void printRoom() {
+	for (int i=0; i<=FRAME_H; i++) {
+		for (int j=1; j<=FRAME_W; j++) {
+			if (room[i][j]) {
+				mvprintw(i, j, "#");
+			}
+			else {
+				mvprintw(i, j, " ");
+			}
+		}
+		refresh();
+	}
+	mvprintw(FRAME_H - 4, FRAME_W + 10, "%d", score);	
+}
+
+int ifGameOver() {
+	struct point p;
+	for (int i=0; i<4; i++) {//判断游戏结束的方法是判断是否当前方块是否出现在第一个位置就会和已有方块冲突
+		p = blocks[curBlock.id][curBlock.shape].p[i];
+		if (room[curPosition.x + p.x][curPosition.y + p.y]) {
+			return 1;
+		}
+	}
+	return 0;
+}
+	
 void setBlocks() {
 	/*设置每种方块每种形状的参数
 	第一维下标0到6表示7种方块
